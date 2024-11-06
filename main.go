@@ -51,7 +51,7 @@ func main() {
 
 	collectionName := generateUniqueCollectionName()
 	collection := client.Database("testdb").Collection(collectionName)
-	objectCounts := generateFibonacciUpTo(1000)
+	objectCounts := generateFibonacciUpTo(10000)
 
 	// ヘッダーを表示
 	fmt.Println("ObjectCount,SizeInBytes,InsertionTime,RetrievalTime(ms)")
