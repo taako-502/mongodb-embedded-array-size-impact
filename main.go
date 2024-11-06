@@ -27,8 +27,8 @@ func main() {
 	}
 	defer client.Disconnect(context.TODO())
 
-	collection := client.Database("testdb").Collection("testcollection")
-
+	collectionName := generateUniqueCollectionName()
+	collection := client.Database("testdb").Collection(collectionName)
 	objectCounts := generateFibonacciUpTo(100)
 
 	for _, count := range objectCounts {
@@ -46,13 +46,18 @@ func main() {
 		}
 		duration := time.Since(start)
 
-		fmt.Printf("Objects count: %d, Retrieval time: %v\n", count, duration)
-
-		_, err = collection.DeleteOne(context.TODO(), bson.M{"_id": insertedDoc.InsertedID})
+		docSize, err := calculateDocumentSize(doc)
 		if err != nil {
-			log.Fatalf("Failed to delete document: %v", err)
+			log.Fatalf("Failed to calculate document size: %v", err)
 		}
+
+		fmt.Printf("Objects count: %d, Retrieval time: %v, Document size: %d bytes\n", count, duration, docSize)
 	}
+}
+
+// generateUniqueCollectionName は、日付と時刻を基にユニークなコレクション名を生成します
+func generateUniqueCollectionName() string {
+	return fmt.Sprintf("testcollection_%s", time.Now().Format("20060102_150405"))
 }
 
 // generateFibonacciUpTo は指定された最大値までのフィボナッチ数列を生成します
@@ -82,4 +87,13 @@ func retrieveDocument(collection *mongo.Collection, id interface{}) error {
 	var result TestDocument
 	err := collection.FindOne(context.TODO(), bson.M{"_id": id}).Decode(&result)
 	return err
+}
+
+// calculateDocumentSize はドキュメントをバイナリ形式に変換し、バイトサイズを計測します
+func calculateDocumentSize(doc TestDocument) (int, error) {
+	bsonData, err := bson.Marshal(doc)
+	if err != nil {
+		return 0, err
+	}
+	return len(bsonData), nil
 }
