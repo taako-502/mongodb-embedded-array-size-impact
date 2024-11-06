@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -16,8 +17,9 @@ type NestedObject struct {
 }
 
 type TestDocument struct {
-	ID      string         `bson:"_id,omitempty"`
-	Objects []NestedObject `bson:"objects"`
+	ID          primitive.ObjectID `bson:"_id,omitempty"`
+	Objects     []NestedObject     `bson:"objects"`
+	SizeInBytes int                `bson:"sizeInBytes"`
 }
 
 func main() {
@@ -33,25 +35,18 @@ func main() {
 
 	for _, count := range objectCounts {
 		doc := createTestDocument(count)
-
-		insertedDoc, err := collection.InsertOne(context.TODO(), doc)
-		if err != nil {
-			log.Fatalf("Failed to insert document: %v", err)
-		}
-
-		start := time.Now()
-		err = retrieveDocument(collection, insertedDoc.InsertedID)
-		if err != nil {
-			log.Fatalf("Failed to retrieve document: %v", err)
-		}
-		duration := time.Since(start)
-
 		docSize, err := calculateDocumentSize(doc)
 		if err != nil {
 			log.Fatalf("Failed to calculate document size: %v", err)
 		}
+		doc.SizeInBytes = docSize
 
-		fmt.Printf("Objects count: %d, Retrieval time: %v, Document size: %d bytes\n", count, duration, docSize)
+		_, err = collection.InsertOne(context.TODO(), doc)
+		if err != nil {
+			log.Fatalf("Failed to insert document: %v", err)
+		}
+
+		fmt.Printf("Inserted document with %d objects, Size: %d bytes\n", count, doc.SizeInBytes)
 	}
 }
 
@@ -80,13 +75,6 @@ func createTestDocument(count int) TestDocument {
 		objects[i] = NestedObject{Data: fmt.Sprintf("data%d", i)}
 	}
 	return TestDocument{Objects: objects}
-}
-
-// retrieveDocument は、指定されたIDのドキュメントを取得します
-func retrieveDocument(collection *mongo.Collection, id interface{}) error {
-	var result TestDocument
-	err := collection.FindOne(context.TODO(), bson.M{"_id": id}).Decode(&result)
-	return err
 }
 
 // calculateDocumentSize はドキュメントをバイナリ形式に変換し、バイトサイズを計測します
