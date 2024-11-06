@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"math/rand/v2"
+	"os"
 	"time"
 
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -21,13 +23,27 @@ type NestedObject struct {
 }
 
 type TestDocument struct {
-	ID          primitive.ObjectID `bson:"_id,omitempty"`
-	Objects     []NestedObject     `bson:"objects"`
-	SizeInBytes int                `bson:"sizeInBytes"`
+	ID            primitive.ObjectID `bson:"_id,omitempty"`
+	Objects       []NestedObject     `bson:"objects"`
+	SizeInBytes   int                `bson:"sizeInBytes"`
+	InsertionTime string             `bson:"insertionTime"` // 挿入時間
+	RetrievalTime int64              `bson:"retrievalTime"` // 取得時間 (ミリ秒)
 }
 
 func main() {
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI("mongodb://localhost:27017"))
+	// .envファイルをロード
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
+
+	// 環境変数からMongoDBのURIを取得
+	uri := os.Getenv("MONGODB_URI")
+	if uri == "" {
+		log.Fatalf("MONGODB_URI must be set")
+	}
+
+	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
 	if err != nil {
 		log.Fatalf("Failed to create MongoDB client: %v", err)
 	}
@@ -35,22 +51,47 @@ func main() {
 
 	collectionName := generateUniqueCollectionName()
 	collection := client.Database("testdb").Collection(collectionName)
-	objectCounts := generateFibonacciUpTo(100)
+	objectCounts := generateFibonacciUpTo(1000)
 
 	for _, count := range objectCounts {
+		start := time.Now()
 		doc := createTestDocument(count)
+
+		// ドキュメントサイズの計測
 		docSize, err := calculateDocumentSize(doc)
 		if err != nil {
 			log.Fatalf("Failed to calculate document size: %v", err)
 		}
 		doc.SizeInBytes = docSize
+		doc.InsertionTime = start.Format("2006-01-02 15:04:05")
 
-		_, err = collection.InsertOne(context.TODO(), doc)
+		// ドキュメント挿入
+		insertedResult, err := collection.InsertOne(context.TODO(), doc)
 		if err != nil {
 			log.Fatalf("Failed to insert document: %v", err)
 		}
 
-		fmt.Printf("Inserted document with %d objects, Size: %d bytes\n", count, doc.SizeInBytes)
+		// ドキュメント取得時間の計測
+		retrievalStart := time.Now()
+		retrievedDoc, err := retrieveDocument(collection, insertedResult.InsertedID)
+		if err != nil {
+			log.Fatalf("Failed to retrieve document: %v", err)
+		}
+		retrievedDoc.RetrievalTime = time.Since(retrievalStart).Milliseconds() // 取得時間（ミリ秒）を設定
+
+		// 更新して取得時間を保存
+		_, err = collection.UpdateOne(
+			context.TODO(),
+			bson.M{"_id": insertedResult.InsertedID},
+			bson.M{"$set": bson.M{"retrievalTime": retrievedDoc.RetrievalTime}},
+		)
+		if err != nil {
+			log.Fatalf("Failed to update document with retrieval time: %v", err)
+		}
+
+		// コンソールに出力
+		fmt.Printf("Inserted document with %d objects, Size: %d bytes, InsertionTime: %s, RetrievalTime: %d ms\n",
+			count, doc.SizeInBytes, doc.InsertionTime, retrievedDoc.RetrievalTime)
 	}
 }
 
@@ -79,8 +120,8 @@ func createTestDocument(count int) TestDocument {
 		objects[i] = NestedObject{
 			Order: i,
 			Data:  generateRandomString(12),
-			Bool:  rand.IntN(2) == 0,                          // ランダムな真偽値
-			IDs:   generateRandomObjectIDs(5 + rand.IntN(16)), // 5〜20個のObjectID
+			Bool:  rand.IntN(2) == 0,
+			IDs:   generateRandomObjectIDs(5 + rand.IntN(16)),
 		}
 	}
 	return TestDocument{Objects: objects}
@@ -112,4 +153,11 @@ func calculateDocumentSize(doc TestDocument) (int, error) {
 		return 0, err
 	}
 	return len(bsonData), nil
+}
+
+// retrieveDocument は、指定されたIDのドキュメントを取得します
+func retrieveDocument(collection *mongo.Collection, id interface{}) (TestDocument, error) {
+	var result TestDocument
+	err := collection.FindOne(context.TODO(), bson.M{"_id": id}).Decode(&result)
+	return result, err
 }

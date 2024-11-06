@@ -2,7 +2,10 @@ module github.com/taako-502/mongodb-embedded-array-size-impact
 
 go 1.23.2
 
-require go.mongodb.org/mongo-driver v1.17.1
+require (
+	github.com/joho/godotenv v1.5.1
+	go.mongodb.org/mongo-driver v1.17.1
+)
 
 require (
 	github.com/golang/snappy v0.0.4 // indirect
