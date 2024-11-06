@@ -142,7 +142,7 @@ func generateRandomString(length int) string {
 // generateRandomObjectIDs は指定された数のランダムなObjectIDを生成します
 func generateRandomObjectIDs(count int) []primitive.ObjectID {
 	ids := make([]primitive.ObjectID, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		ids[i] = primitive.NewObjectID()
 	}
 	return ids
