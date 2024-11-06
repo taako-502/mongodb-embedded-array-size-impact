@@ -53,6 +53,9 @@ func main() {
 	collection := client.Database("testdb").Collection(collectionName)
 	objectCounts := generateFibonacciUpTo(1000)
 
+	// ヘッダーを表示
+	fmt.Println("ObjectCount,SizeInBytes,InsertionTime,RetrievalTime(ms)")
+
 	for _, count := range objectCounts {
 		start := time.Now()
 		doc := createTestDocument(count)
@@ -89,9 +92,8 @@ func main() {
 			log.Fatalf("Failed to update document with retrieval time: %v", err)
 		}
 
-		// コンソールに出力
-		fmt.Printf("Inserted document with %d objects, Size: %d bytes, InsertionTime: %s, RetrievalTime: %d ms\n",
-			count, doc.SizeInBytes, doc.InsertionTime, retrievedDoc.RetrievalTime)
+		// CSV形式でコンソールに出力
+		fmt.Printf("%d,%d,%s,%d\n", count, doc.SizeInBytes, doc.InsertionTime, retrievedDoc.RetrievalTime)
 	}
 }
 
