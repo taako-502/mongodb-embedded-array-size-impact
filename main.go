@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -13,7 +14,10 @@ import (
 )
 
 type NestedObject struct {
-	Data string `bson:"data"`
+	Order int                  `bson:"order"`
+	Data  string               `bson:"data"`
+	Bool  bool                 `bson:"bool"`
+	IDs   []primitive.ObjectID `bson:"ids"`
 }
 
 type TestDocument struct {
@@ -72,9 +76,33 @@ func generateFibonacciUpTo(max int) []int {
 func createTestDocument(count int) TestDocument {
 	objects := make([]NestedObject, count)
 	for i := 0; i < count; i++ {
-		objects[i] = NestedObject{Data: fmt.Sprintf("data%d", i)}
+		objects[i] = NestedObject{
+			Order: i,
+			Data:  generateRandomString(12),
+			Bool:  rand.IntN(2) == 0,                          // ランダムな真偽値
+			IDs:   generateRandomObjectIDs(5 + rand.IntN(16)), // 5〜20個のObjectID
+		}
 	}
 	return TestDocument{Objects: objects}
+}
+
+// generateRandomString は指定された長さのランダムな文字列を生成します
+func generateRandomString(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	result := make([]byte, length)
+	for i := range result {
+		result[i] = charset[rand.IntN(len(charset))]
+	}
+	return string(result)
+}
+
+// generateRandomObjectIDs は指定された数のランダムなObjectIDを生成します
+func generateRandomObjectIDs(count int) []primitive.ObjectID {
+	ids := make([]primitive.ObjectID, count)
+	for i := 0; i < count; i++ {
+		ids[i] = primitive.NewObjectID()
+	}
+	return ids
 }
 
 // calculateDocumentSize はドキュメントをバイナリ形式に変換し、バイトサイズを計測します
