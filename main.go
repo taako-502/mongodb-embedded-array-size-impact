@@ -26,18 +26,17 @@ type TestDocument struct {
 	ID            primitive.ObjectID `bson:"_id,omitempty"`
 	Objects       []NestedObject     `bson:"objects"`
 	SizeInBytes   int                `bson:"sizeInBytes"`
-	InsertionTime string             `bson:"insertionTime"` // 挿入時間
-	RetrievalTime int64              `bson:"retrievalTime"` // 取得時間 (ミリ秒)
+	InsertionTime string             `bson:"insertionTime"`
+	RetrievalTime int64              `bson:"retrievalTime"`
 }
 
+// go run main.go で実行
 func main() {
-	// .envファイルをロード
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatalf("Error loading .env file")
 	}
 
-	// 環境変数からMongoDBのURIを取得
 	uri := os.Getenv("MONGODB_URI")
 	if uri == "" {
 		log.Fatalf("MONGODB_URI must be set")
@@ -49,62 +48,56 @@ func main() {
 	}
 	defer client.Disconnect(context.TODO())
 
-	collectionName := generateUniqueCollectionName()
-	collection := client.Database("testdb").Collection(collectionName)
-	objectCounts := generateFibonacciUpTo(10000)
+	// CSV形式のヘッダーを出力
+	fmt.Println("ObjectCount,AvgSizeInBytes,RetrievalTime(ms)")
 
-	// ヘッダーを表示
-	fmt.Println("ObjectCount,SizeInBytes,InsertionTime,RetrievalTime(ms)")
+	objectCounts := generateFibonacciSequenceUpTo(10000)
 
-	for _, count := range objectCounts {
-		start := time.Now()
-		doc := createTestDocument(count)
+	for _, n := range objectCounts {
+		collectionName := fmt.Sprintf("testcollection_N=%d_%s", n, time.Now().Format("20060102_150405"))
+		collection := client.Database("testdb").Collection(collectionName)
 
-		// ドキュメントサイズの計測
-		docSize, err := calculateDocumentSize(doc)
-		if err != nil {
-			log.Fatalf("Failed to calculate document size: %v", err)
+		var totalSize int64
+		docCount := 35 // 35個のドキュメントを生成
+
+		for range docCount {
+			start := time.Now()
+			doc := createTestDocument(n)
+
+			docSize, err := calculateDocumentSize(doc)
+			if err != nil {
+				log.Fatalf("Failed to calculate document size: %v", err)
+			}
+			totalSize += int64(docSize)
+			doc.SizeInBytes = docSize
+			doc.InsertionTime = start.Format("2006-01-02 15:04:05")
+
+			_, err = collection.InsertOne(context.TODO(), doc)
+			if err != nil {
+				log.Fatalf("Failed to insert document: %v", err)
+			}
 		}
-		doc.SizeInBytes = docSize
-		doc.InsertionTime = start.Format("2006-01-02 15:04:05")
 
-		// ドキュメント挿入
-		insertedResult, err := collection.InsertOne(context.TODO(), doc)
-		if err != nil {
-			log.Fatalf("Failed to insert document: %v", err)
-		}
-
-		// ドキュメント取得時間の計測
+		averageSize := totalSize / int64(docCount)
 		retrievalStart := time.Now()
-		retrievedDoc, err := retrieveDocument(collection, insertedResult.InsertedID)
+		cursor, err := collection.Find(context.TODO(), bson.M{})
 		if err != nil {
-			log.Fatalf("Failed to retrieve document: %v", err)
+			log.Fatalf("Failed to retrieve documents: %v", err)
 		}
-		retrievedDoc.RetrievalTime = time.Since(retrievalStart).Milliseconds() // 取得時間（ミリ秒）を設定
-
-		// 更新して取得時間を保存
-		_, err = collection.UpdateOne(
-			context.TODO(),
-			bson.M{"_id": insertedResult.InsertedID},
-			bson.M{"$set": bson.M{"retrievalTime": retrievedDoc.RetrievalTime}},
-		)
-		if err != nil {
-			log.Fatalf("Failed to update document with retrieval time: %v", err)
+		var retrievedDocs []TestDocument
+		if err = cursor.All(context.TODO(), &retrievedDocs); err != nil {
+			log.Fatalf("Failed to decode documents: %v", err)
 		}
+		retrievalTime := time.Since(retrievalStart).Milliseconds()
 
-		// CSV形式でコンソールに出力
-		fmt.Printf("%d,%d,%s,%d\n", count, doc.SizeInBytes, doc.InsertionTime, retrievedDoc.RetrievalTime)
+		// CSV形式で結果を出力
+		fmt.Printf("%d,%d,%d\n", n, averageSize, retrievalTime)
 	}
 }
 
-// generateUniqueCollectionName は、日付と時刻を基にユニークなコレクション名を生成します
-func generateUniqueCollectionName() string {
-	return fmt.Sprintf("testcollection_%s", time.Now().Format("20060102_150405"))
-}
-
-// generateFibonacciUpTo は指定された最大値までのフィボナッチ数列を生成します
-func generateFibonacciUpTo(max int) []int {
-	fibSequence := []int{0, 1}
+// フィボナッチ数列を指定された最大値まで生成
+func generateFibonacciSequenceUpTo(max int) []int {
+	fibSequence := []int{1, 2}
 	for {
 		next := fibSequence[len(fibSequence)-1] + fibSequence[len(fibSequence)-2]
 		if next > max {
@@ -115,7 +108,7 @@ func generateFibonacciUpTo(max int) []int {
 	return fibSequence
 }
 
-// createTestDocument は、指定された数のネストされたオブジェクトを持つドキュメントを作成します
+// createTestDocument は、指定された数の NestedObject を持つドキュメントを作成します
 func createTestDocument(count int) TestDocument {
 	objects := make([]NestedObject, count)
 	for i := 0; i < count; i++ {
@@ -155,11 +148,4 @@ func calculateDocumentSize(doc TestDocument) (int, error) {
 		return 0, err
 	}
 	return len(bsonData), nil
-}
-
-// retrieveDocument は、指定されたIDのドキュメントを取得します
-func retrieveDocument(collection *mongo.Collection, id interface{}) (TestDocument, error) {
-	var result TestDocument
-	err := collection.FindOne(context.TODO(), bson.M{"_id": id}).Decode(&result)
-	return result, err
 }
