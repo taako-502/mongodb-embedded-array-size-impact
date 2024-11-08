@@ -79,7 +79,7 @@ func main() {
 		}
 
 		averageSize := totalSize / int64(docCount)
-		retrievalStart := time.Now()
+		retrievalStart := time.Now() // 検索時間を計測開始
 		cursor, err := collection.Find(context.TODO(), bson.M{})
 		if err != nil {
 			log.Fatalf("Failed to retrieve documents: %v", err)
@@ -88,7 +88,7 @@ func main() {
 		if err = cursor.All(context.TODO(), &retrievedDocs); err != nil {
 			log.Fatalf("Failed to decode documents: %v", err)
 		}
-		retrievalTime := time.Since(retrievalStart).Milliseconds()
+		retrievalTime := time.Since(retrievalStart).Milliseconds() // 検索時間を計測終了
 
 		// CSV形式で結果を出力
 		fmt.Printf("%d,%d,%d\n", n, averageSize, retrievalTime)
