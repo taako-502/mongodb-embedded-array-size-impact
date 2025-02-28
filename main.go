@@ -9,25 +9,24 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 type NestedObject struct {
-	Order int                  `bson:"order"`
-	Data  string               `bson:"data"`
-	Bool  bool                 `bson:"bool"`
-	IDs   []primitive.ObjectID `bson:"ids"`
+	Order int             `bson:"order"`
+	Data  string          `bson:"data"`
+	Bool  bool            `bson:"bool"`
+	IDs   []bson.ObjectID `bson:"ids"`
 }
 
 type TestDocument struct {
-	ID            primitive.ObjectID `bson:"_id,omitempty"`
-	Objects       []NestedObject     `bson:"objects"`
-	SizeInBytes   int                `bson:"sizeInBytes"`
-	InsertionTime string             `bson:"insertionTime"`
-	RetrievalTime int64              `bson:"retrievalTime"`
+	ID            bson.ObjectID  `bson:"_id,omitempty"`
+	Objects       []NestedObject `bson:"objects"`
+	SizeInBytes   int            `bson:"sizeInBytes"`
+	InsertionTime string         `bson:"insertionTime"`
+	RetrievalTime int64          `bson:"retrievalTime"`
 }
 
 // go run main.go で実行
@@ -42,7 +41,7 @@ func main() {
 		log.Fatalf("MONGODB_URI must be set")
 	}
 
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
+	client, err := mongo.Connect(options.Client().ApplyURI(uri))
 	if err != nil {
 		log.Fatalf("Failed to create MongoDB client: %v", err)
 	}
@@ -72,8 +71,7 @@ func main() {
 			doc.SizeInBytes = docSize
 			doc.InsertionTime = start.Format("2006-01-02 15:04:05")
 
-			_, err = collection.InsertOne(context.TODO(), doc)
-			if err != nil {
+			if _, err = collection.InsertOne(context.TODO(), doc); err != nil {
 				log.Fatalf("Failed to insert document: %v", err)
 			}
 		}
@@ -111,7 +109,7 @@ func generateFibonacciSequenceUpTo(max int) []int {
 // createTestDocument は、指定された数の NestedObject を持つドキュメントを作成します
 func createTestDocument(count int) TestDocument {
 	objects := make([]NestedObject, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		objects[i] = NestedObject{
 			Order: i,
 			Data:  generateRandomString(12),
@@ -133,10 +131,10 @@ func generateRandomString(length int) string {
 }
 
 // generateRandomObjectIDs は指定された数のランダムなObjectIDを生成します
-func generateRandomObjectIDs(count int) []primitive.ObjectID {
-	ids := make([]primitive.ObjectID, count)
+func generateRandomObjectIDs(count int) []bson.ObjectID {
+	ids := make([]bson.ObjectID, count)
 	for i := range count {
-		ids[i] = primitive.NewObjectID()
+		ids[i] = bson.NewObjectID()
 	}
 	return ids
 }
