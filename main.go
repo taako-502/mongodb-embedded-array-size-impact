@@ -5,48 +5,26 @@ import (
 	"fmt"
 	"log"
 	"math/rand/v2"
-	"os"
 	"time"
 
-	"github.com/joho/godotenv"
+	"github.com/taako-502/mongodb-embedded-array-size-impact/pkg/model"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-type NestedObject struct {
-	Order int             `bson:"order"`
-	Data  string          `bson:"data"`
-	Bool  bool            `bson:"bool"`
-	IDs   []bson.ObjectID `bson:"ids"`
-}
+var client *mongo.Client
 
-type TestDocument struct {
-	ID            bson.ObjectID  `bson:"_id,omitempty"`
-	Objects       []NestedObject `bson:"objects"`
-	SizeInBytes   int            `bson:"sizeInBytes"`
-	InsertionTime string         `bson:"insertionTime"`
-	RetrievalTime int64          `bson:"retrievalTime"`
+func init() {
+	var err error
+	client, err = mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // go run main.go で実行
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file")
-	}
-
-	uri := os.Getenv("MONGODB_URI")
-	if uri == "" {
-		log.Fatalf("MONGODB_URI must be set")
-	}
-
-	client, err := mongo.Connect(options.Client().ApplyURI(uri))
-	if err != nil {
-		log.Fatalf("Failed to create MongoDB client: %v", err)
-	}
-	defer client.Disconnect(context.TODO())
-
 	// CSV形式のヘッダーを出力
 	fmt.Println("ObjectCount,AvgSizeInBytes,RetrievalTime(ms)")
 
@@ -82,7 +60,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to retrieve documents: %v", err)
 		}
-		var retrievedDocs []TestDocument
+		var retrievedDocs []model.TestDocument
 		if err = cursor.All(context.TODO(), &retrievedDocs); err != nil {
 			log.Fatalf("Failed to decode documents: %v", err)
 		}
@@ -107,17 +85,17 @@ func generateFibonacciSequenceUpTo(max int) []int {
 }
 
 // createTestDocument は、指定された数の NestedObject を持つドキュメントを作成します
-func createTestDocument(count int) TestDocument {
-	objects := make([]NestedObject, count)
+func createTestDocument(count int) model.TestDocument {
+	objects := make([]model.NestedObject, count)
 	for i := range count {
-		objects[i] = NestedObject{
+		objects[i] = model.NestedObject{
 			Order: i,
 			Data:  generateRandomString(12),
 			Bool:  rand.IntN(2) == 0,
 			IDs:   generateRandomObjectIDs(5 + rand.IntN(16)),
 		}
 	}
-	return TestDocument{Objects: objects}
+	return model.TestDocument{Objects: objects}
 }
 
 // generateRandomString は指定された長さのランダムな文字列を生成します
@@ -140,7 +118,7 @@ func generateRandomObjectIDs(count int) []bson.ObjectID {
 }
 
 // calculateDocumentSize はドキュメントをバイナリ形式に変換し、バイトサイズを計測します
-func calculateDocumentSize(doc TestDocument) (int, error) {
+func calculateDocumentSize(doc model.TestDocument) (int, error) {
 	bsonData, err := bson.Marshal(doc)
 	if err != nil {
 		return 0, err
