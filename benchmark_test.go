@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand/v2"
+	"testing"
 	"time"
 
 	"github.com/taako-502/mongodb-embedded-array-size-impact/pkg/model"
@@ -23,8 +24,7 @@ func init() {
 	}
 }
 
-// go run main.go で実行
-func main() {
+func Benchmark(b *testing.B) {
 	// CSV形式のヘッダーを出力
 	fmt.Println("ObjectCount,AvgSizeInBytes,RetrievalTime(ms)")
 
@@ -43,31 +43,28 @@ func main() {
 
 			docSize, err := calculateDocumentSize(doc)
 			if err != nil {
-				log.Fatalf("Failed to calculate document size: %v", err)
+				b.Fatalf("Failed to calculate document size: %v", err)
 			}
 			totalSize += int64(docSize)
 			doc.SizeInBytes = docSize
 			doc.InsertionTime = start.Format("2006-01-02 15:04:05")
 
 			if _, err = collection.InsertOne(context.TODO(), doc); err != nil {
-				log.Fatalf("Failed to insert document: %v", err)
+				b.Fatalf("Failed to insert document: %v", err)
 			}
 		}
 
-		averageSize := totalSize / int64(docCount)
-		retrievalStart := time.Now() // 検索時間を計測開始
-		cursor, err := collection.Find(context.TODO(), bson.M{})
-		if err != nil {
-			log.Fatalf("Failed to retrieve documents: %v", err)
+		b.ResetTimer()
+		for b.Loop() {
+			cursor, err := collection.Find(context.TODO(), bson.M{})
+			if err != nil {
+				b.Fatalf("Failed to retrieve documents: %v", err)
+			}
+			var retrievedDocs []model.TestDocument
+			if err = cursor.All(context.TODO(), &retrievedDocs); err != nil {
+				b.Fatalf("Failed to decode documents: %v", err)
+			}
 		}
-		var retrievedDocs []model.TestDocument
-		if err = cursor.All(context.TODO(), &retrievedDocs); err != nil {
-			log.Fatalf("Failed to decode documents: %v", err)
-		}
-		retrievalTime := time.Since(retrievalStart).Milliseconds() // 検索時間を計測終了
-
-		// CSV形式で結果を出力
-		fmt.Printf("%d,%d,%d\n", n, averageSize, retrievalTime)
 	}
 }
 
